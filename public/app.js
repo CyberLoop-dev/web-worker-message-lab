@@ -1,0 +1,12 @@
+const logNode=document.querySelector("#log"),lamp=document.querySelector("#lamp"),statusNode=document.querySelector("#status");
+let worker=null,sequence=0;
+function log(text){const li=document.createElement("li");li.textContent=new Date().toLocaleTimeString()+" — "+text;logNode.prepend(li);while(logNode.children.length>24)logNode.lastElementChild.remove();}
+function setStatus(active,text){lamp.classList.toggle("on",active);statusNode.textContent=text;}
+function startWorker(){if(worker)worker.terminate();worker=new Worker("/worker.js");worker.onmessage=e=>{const data=e.data;if(data.type==="buffer-returned"){log("Worker returned buffer: "+data.bytes.join(", "));document.querySelector("#buffer-state").textContent="Returned "+data.byteLength+" bytes.";}else log("Worker → "+JSON.stringify(data));};worker.onerror=e=>{log("Worker error: "+e.message);setStatus(false,"Worker error");};worker.onmessageerror=()=>log("messageerror: structured data could not be deserialized");setStatus(true,"Worker running");log("Worker created.");}
+document.querySelector("#restart").addEventListener("click",startWorker);
+document.querySelector("#terminate").addEventListener("click",()=>{if(worker){worker.terminate();worker=null;}setStatus(false,"Worker terminated");log("terminate() called.");});
+document.querySelector("#send-object").addEventListener("click",()=>{if(!worker)return log("Start the Worker first.");const payload={kind:"profile",user:{name:"Ada",roles:["reader","builder"]},sentAt:new Date().toISOString()};worker.postMessage({type:"echo",sequence:++sequence,payload});log("Main → object message #"+sequence);});
+document.querySelector("#send-buffer").addEventListener("click",()=>{if(!worker)return log("Start the Worker first.");const buffer=new ArrayBuffer(8);new Uint8Array(buffer).set([3,6,9,12,15,18,21,24]);worker.postMessage({type:"transfer-buffer",sequence:++sequence,buffer},[buffer]);document.querySelector("#buffer-state").textContent="Sender byteLength after transfer: "+buffer.byteLength;log("Main → transferred ArrayBuffer; sender byteLength is "+buffer.byteLength);});
+document.querySelector("#send-burst").addEventListener("click",()=>{if(!worker)return log("Start the Worker first.");for(let i=1;i<=3;i++){worker.postMessage({type:"ordered",sequence:++sequence,label:"burst-"+i});log("Main → queued burst message #"+sequence);}});
+document.querySelector("#clear").addEventListener("click",()=>logNode.replaceChildren());
+startWorker();
